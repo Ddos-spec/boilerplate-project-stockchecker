@@ -5,12 +5,17 @@ const bodyParser = require('body-parser');
 const cors = require('cors');
 const helmet = require('helmet');
 const mongoose = require('mongoose');
+require('dotenv').config();
 
 const apiRoutes = require('./routes/api.js');
 const fccTestingRoutes = require('./routes/fcctesting.js');
 const runner = require('./test-runner');
 
 const app = express();
+
+app.use('/public', express.static(process.cwd() + '/public'));
+
+app.use(cors({ origin: '*' })); // For FCC testing purposes only
 
 // Security configuration with Helmet
 app.use(helmet({
@@ -23,18 +28,8 @@ app.use(helmet({
   }
 }));
 
-app.use('/public', express.static(process.cwd() + '/public'));
-
-app.use(cors({origin: '*'})); // For FCC testing purposes only
-
 app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true }));
-
-// Connect to MongoDB
-mongoose.connect(process.env.MONGO_URI || process.env.DB || 'mongodb://localhost/stock-price-checker', {
-  useNewUrlParser: true,
-  useUnifiedTopology: true
-});
 
 // Index page (static HTML)
 app.route('/')
@@ -46,8 +41,8 @@ app.route('/')
 fccTestingRoutes(app);
 
 // Routing for API 
-apiRoutes(app);  
-    
+apiRoutes(app);
+
 // 404 Not Found Middleware
 app.use(function(req, res, next) {
   res.status(404)
@@ -56,21 +51,29 @@ app.use(function(req, res, next) {
 });
 
 const port = process.env.PORT || 3000;
+const mongoUri = process.env.DB;
 
-// Start our server and tests!
-app.listen(port, function () {
-  console.log("Listening on port " + port);
-  if(process.env.NODE_ENV==='test') {
-    console.log('Running Tests...');
-    setTimeout(function () {
-      try {
-        runner.run();
-      } catch(e) {
-        console.log('Tests are not valid:');
-        console.log(e);
+// Connect to DB then start server
+mongoose.connect(mongoUri)
+  .then(() => {
+    console.log('Database connection successful');
+    app.listen(port, function () {
+      console.log("Listening on port " + port);
+      if (process.env.NODE_ENV === 'test') {
+        console.log('Running Tests...');
+        setTimeout(function () {
+          try {
+            runner.run();
+          } catch (e) {
+            console.log('Tests are not valid:');
+            console.error(e);
+          }
+        }, 1500);
       }
-    }, 3500);
-  }
-});
+    });
+  })
+  .catch(err => {
+    console.error('Database connection error: ', err);
+  });
 
 module.exports = app; // for testing
